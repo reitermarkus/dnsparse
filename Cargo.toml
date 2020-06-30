@@ -1,7 +1,16 @@
 [package]
 name = "dnsparse"
 version = "0.1.0"
-authors = ["Markus Reiter <me@reitermark.us>"]
 edition = "2018"
+authors = ["Markus Reiter <me@reitermark.us>"]
+license = "MIT OR Apache-2.0"
+readme = "ReadMe.md"
+description = "A `no_std` library for parsing and generating DNS queries and responses."
+documentation = "https://docs.rs/dnsparse"
+repository = "https://github.com/reitermarkus/dnsparse"
+homepage = "https://github.com/reitermarkus/dnsparse"
+keywords = ["dns", "query", "response", "no-std"]
+categories = ["network-programming", "parser-implementations"]
+exclude = ["/.github"]
 
 [dependencies]
