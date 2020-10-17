@@ -285,6 +285,7 @@ impl Header {
 }
 
 /// Builder for [`Header`](struct.Header.html).
+#[derive(Debug)]
 pub struct HeaderBuilder(Header);
 
 impl Default for HeaderBuilder {

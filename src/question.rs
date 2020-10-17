@@ -37,6 +37,7 @@ impl<'a> Question<'a> {
 }
 
 /// Iterator over [`Question`](struct.Question.html)s contained in a [`Message`](struct.Message.html).
+#[derive(Debug)]
 pub struct Questions<'a> {
   pub(crate) question_count: usize,
   pub(crate) current_question: usize,

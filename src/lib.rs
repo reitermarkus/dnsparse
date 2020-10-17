@@ -1,4 +1,5 @@
 #![no_std]
+#![deny(missing_debug_implementations)]
 
 //! A `no_std` library for parsing and generating DNS queries and responses.
 //!

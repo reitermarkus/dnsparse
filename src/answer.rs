@@ -1,6 +1,7 @@
 use crate::{Name, QueryKind, QueryClass};
 
 /// A DNS answer.
+#[derive(Debug)]
 pub struct Answer<'a> {
   pub name: Name<'a>,
   pub kind: QueryKind,

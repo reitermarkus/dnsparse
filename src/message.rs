@@ -19,6 +19,7 @@ pub struct Message<'a> {
 }
 
 /// Builder for [`Message`](struct.Message.html).
+#[derive(Debug)]
 pub struct MessageBuilder<'a> {
   buf: &'a mut [u8],
   len: usize,
