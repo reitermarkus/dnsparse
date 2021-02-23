@@ -9,6 +9,89 @@ pub struct Name<'a> {
 }
 
 impl<'a> Name<'a> {
+  pub fn from_bytes(bytes: &'a [u8]) -> Self {
+    Self { buf: bytes, start: 0 }
+  }
+
+  pub(crate) fn create_pointer(&self, sub_name: &Name<'_>) -> Option<[u8; 2]> {
+    let mut labels = self.labels();
+    while labels.next().is_some() {
+      if self.equal_from(labels.buf_i, sub_name) {
+        let [ptr_1, ptr_2] = (labels.buf_i as u16).to_be_bytes();
+        return Some([ptr_1 | PTR_MASK, ptr_2]);
+      }
+    }
+
+    None
+  }
+
+  fn equal_from(&self, i: usize, sub_name: &Name<'_>) -> bool {
+    let mut this = Labels { buf: self.buf, buf_i: i };
+    let mut other = sub_name.labels();
+
+    loop {
+      match (this.next(), other.next()) {
+        (Some(t), Some(o)) => if !t.iter().zip(o.iter()).all(|(t, o)| t.eq_ignore_ascii_case(o)) {
+          break;
+        },
+        (None, None) => return true,
+        _ => break,
+      }
+    }
+
+    false
+  }
+
+
+
+  pub(crate) fn read(buf: &[u8], i: &mut usize) -> bool {
+    let global_start = *i;
+
+    let mut iteration: u8 = 0;
+    let mut len: u8 = 0;
+
+    return read_rec(buf, i, global_start, &mut iteration, &mut len);
+
+    fn read_rec(buf: &[u8], i: &mut usize, global_start: usize, iteration: &mut u8, len: &mut u8) -> bool {
+      let rec_start = *i;
+
+      loop {
+        match Label::read(buf, i) {
+          None => return false,
+          Some(Label::Pointer(ptr)) => {
+            let mut ptr = ptr as usize;
+
+            // Stop following self-referencing pointer.
+            if ptr == global_start || (ptr >= rec_start && ptr < *i) {
+              return false
+            }
+
+            return read_rec(buf, &mut ptr, global_start, iteration, len);
+          },
+          Some(Label::Part(part_len)) => {
+            if part_len == 0 {
+              return true
+            }
+
+            // Stop if maximum name length of 255 bytes is reached.
+            *len = if let Some(len) = len.checked_add(part_len) {
+              len
+            } else {
+              return false
+            };
+          },
+        }
+
+        // Stop after a maximum 255 iterations.
+        *iteration = if let Some(iteration) = iteration.checked_add(1) {
+          iteration
+        } else {
+          return false
+        };
+      }
+    }
+  }
+
   pub(crate) fn labels(&self) -> Labels<'a> {
     Labels {
       buf: self.buf,
@@ -69,6 +152,7 @@ impl PartialEq<str> for Name<'_> {
   }
 }
 
+#[derive(Debug, Clone)]
 pub(crate) struct Labels<'a> {
   buf: &'a [u8],
   buf_i: usize,
@@ -79,7 +163,7 @@ impl<'a> Iterator for Labels<'a> {
 
   fn next(&mut self) -> Option<Self::Item> {
     loop {
-      match read_label(self.buf, &mut self.buf_i) {
+      match Label::read(self.buf, &mut self.buf_i) {
         None => return None,
         Some(Label::Pointer(ptr)) => {
           self.buf_i = ptr as usize;
@@ -97,79 +181,47 @@ impl<'a> Iterator for Labels<'a> {
   }
 }
 
+#[derive(Debug)]
 pub(crate) enum Label {
   Pointer(u16),
   Part(u8),
 }
 
-/// # TODO
-///
-/// Verify [CVE-2000-0333]/[VU#23495] is fully prevented in this function.
-///
-/// [CVE-2000-0333]: https://nvd.nist.gov/vuln/detail/CVE-2000-0333
-/// [VU#23495]: https://www.kb.cert.org/vuls/id/23495/
-pub(crate) fn read_name(buf: &[u8], i: &mut usize) -> bool {
-  let global_start = *i;
-
-  let mut iteration: u8 = 0;
-  let mut len: u8 = 0;
-
-  loop {
-    let local_start = *i;
-
-    match read_label(buf, i) {
-      None => return false,
-      Some(Label::Pointer(ptr)) => {
-        // Stop following self-referencing pointer.
-        if ptr as usize == global_start || ptr as usize == local_start {
-          return false
-        }
-
-        *i = ptr as usize;
-      },
-      Some(Label::Part(part_len)) => {
-        if part_len == 0 {
-          return true
-        }
-
-        // Stop if maximum name length of 255 bytes is reached.
-        len = if let Some(len) = len.checked_add(part_len) {
-          len
-        } else {
-          return false
-        };
-      },
-    }
-
-    // Stop after a maximum 255 iterations.
-    iteration = if let Some(iteration) = iteration.checked_add(1) {
-      iteration
-    } else {
-      return false
-    };
-  }
-}
-
 const PTR_MASK: u8 = 0b11000000;
 const LEN_MASK: u8 = !PTR_MASK;
 
-// Return whether a label was read and whether it was a pointer or a normal name part.
-fn read_label(buf: &[u8], i: &mut usize) -> Option<Label> {
-  if let Some(&ptr_or_len) = buf.get(*i) {
-    // Check for pointer:
-    // https://tools.ietf.org/rfc/rfc1035#section-4.1.4
-    if ptr_or_len & PTR_MASK == PTR_MASK {
-      if let Some(&ptr) = buf.get(*i + 1) {
-        *i += 1 + 1;
-        Some(Label::Pointer(u16::from_be_bytes([ptr_or_len & LEN_MASK, ptr])))
+impl Label {
+  /// Return whether a label was read and whether it was a pointer or a normal name part.
+  pub(crate) fn read(buf: &[u8], i: &mut usize) -> Option<Label> {
+    if let Some(&ptr_or_len) = buf.get(*i) {
+      // Check for pointer:
+      // https://tools.ietf.org/rfc/rfc1035#section-4.1.4
+      if ptr_or_len & PTR_MASK == PTR_MASK {
+        if let Some(&ptr) = buf.get(*i + 1) {
+          *i += 1 + 1;
+          Some(Label::Pointer(u16::from_be_bytes([ptr_or_len & LEN_MASK, ptr])))
+        } else {
+          None
+        }
       } else {
-        None
+        *i += 1 + (ptr_or_len & LEN_MASK) as usize;
+        Some(Label::Part(ptr_or_len & LEN_MASK))
       }
     } else {
-      *i += 1 + (ptr_or_len & LEN_MASK) as usize;
-      Some(Label::Part(ptr_or_len & LEN_MASK))
+      None
     }
-  } else {
-    None
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn test_name_create_ptr() {
+    let name = Name::from_bytes(&[1, b'a', 1, b'b', 1, b'c', 0]);
+    let sub_name = Name::from_bytes(&[1, b'b', 1, b'c', 0]);
+
+    assert_eq!(name.create_pointer(&sub_name), Some([0b11000000, 2]));
   }
 }

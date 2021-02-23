@@ -1,8 +1,6 @@
 use core::fmt;
-use core::mem::size_of;
 
 use crate::{Name, QueryKind, QueryClass};
-use crate::name::read_name;
 
 /// A DNS question.
 #[repr(C)]
@@ -23,14 +21,22 @@ impl fmt::Debug for Question<'_> {
 }
 
 impl<'a> Question<'a> {
+  #[inline]
+  pub(crate) fn read(buf: &[u8], i: &mut usize) -> bool {
+    Name::read(buf, i) && QueryKind::read(buf, i) && QueryClass::read(buf, i)
+  }
+
+  #[inline]
   pub fn name(&self) -> &Name<'a> {
     &self.name
   }
 
+  #[inline]
   pub fn kind(&self) -> &QueryKind {
     &self.kind
   }
 
+  #[inline]
   pub fn class(&self) -> &QueryClass {
     &self.class
   }
@@ -45,23 +51,6 @@ pub struct Questions<'a> {
   pub(crate) buf_i: usize,
 }
 
-pub(crate) fn read_question(buf: &[u8], i: &mut usize) -> bool {
-  if read_name(buf, i) {
-    read_query_class_and_kind(buf, i)
-  } else {
-    false
-  }
-}
-
-#[inline]
-fn read_query_class_and_kind(buf: &[u8], i: &mut usize) -> bool {
-  if *i + size_of::<QueryClass>() + size_of::<QueryKind>() <= buf.len() {
-    *i += size_of::<QueryClass>() + size_of::<QueryKind>();
-    true
-  } else {
-    false
-  }
-}
 
 impl<'a> Iterator for Questions<'a> {
   type Item = Question<'a>;
@@ -73,8 +62,9 @@ impl<'a> Iterator for Questions<'a> {
 
     let mut i = self.buf_i;
 
-
-    assert!(read_question(&self.buf, &mut i));
+    // `Questions` can only be created from a valid `Message`, so
+    // reading a `Question` should always succeed here.
+    assert!(Question::read(&self.buf, &mut i));
     let question = Question {
       name: Name {
         buf: &self.buf,

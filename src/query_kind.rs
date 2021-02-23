@@ -1,3 +1,5 @@
+use core::mem::size_of;
+
 /// The kind of a DNS query.
 ///
 /// According to [RFC 1035 Section 3.2.2](https://tools.ietf.org/rfc/rfc1035#section-3.2.2)
@@ -57,6 +59,15 @@ impl From<u16> for QueryKind {
 }
 
 impl QueryKind {
+  pub(crate) fn read(buf: &[u8], i: &mut usize) -> bool {
+    if *i + size_of::<QueryKind>() <= buf.len() {
+      *i += size_of::<QueryKind>();
+      true
+    } else {
+      false
+    }
+  }
+
   pub(crate) fn to_be_bytes(&self) -> [u8; 2] {
     (*self as u16).to_be_bytes()
   }

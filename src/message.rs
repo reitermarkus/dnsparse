@@ -2,8 +2,7 @@ use core::ops::Deref;
 use core::mem::{size_of};
 use core::fmt;
 
-use crate::{Answer, Header, Questions, QueryKind, QueryClass, Name};
-use crate::question::read_question;
+use crate::{Answer, Header, Question, Questions, QueryKind, QueryClass, Name};
 
 const HEADER_SIZE: usize = size_of::<Header>();
 const MAX_MESSAGE_SIZE: usize = 512 - HEADER_SIZE;
@@ -66,7 +65,7 @@ impl<'a> Message<'a> {
     let mut i = HEADER_SIZE;
 
     for _ in 0..frame.header().question_count() {
-      if !read_question(&frame.buf, &mut i) {
+      if !Question::read(&frame.buf, &mut i) {
         return Err(())
       }
     }
@@ -104,6 +103,15 @@ impl Message<'_> {
     unsafe { &mut *(self.buf[..HEADER_SIZE].as_mut_ptr() as *mut _ as *mut Header) }
   }
 
+  pub fn add_question(&mut self, question: &Question<'_>) {
+    self.add_name(&question.name());
+    self.add_kind(&question.kind());
+    self.add_class(&question.class());
+
+    let header = self.header_mut();
+    unsafe { header.set_question_count(header.question_count() + 1) };
+  }
+
   pub fn add_answer(&mut self, answer: &Answer<'_>) {
     self.add_name(&answer.name);
     self.add_kind(&answer.kind);
@@ -116,6 +124,13 @@ impl Message<'_> {
   }
 
   fn add_name(&mut self, name: &Name<'_>) {
+    for question in self.questions() {
+      if let Some(pointer) = question.name().create_pointer(name) {
+        self.extend(&pointer);
+        return;
+      }
+    }
+
     for label in name.labels() {
       self.extend(&[label.len() as u8]);
       self.extend(label);
