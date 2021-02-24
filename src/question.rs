@@ -5,9 +5,9 @@ use crate::{Name, QueryKind, QueryClass};
 /// A DNS question.
 #[repr(C)]
 pub struct Question<'a> {
-  name: Name<'a>,
-  kind: QueryKind,
-  class: QueryClass,
+  pub(crate) name: Name<'a>,
+  pub(crate) kind: QueryKind,
+  pub(crate) class: QueryClass,
 }
 
 impl fmt::Debug for Question<'_> {
@@ -51,7 +51,6 @@ pub struct Questions<'a> {
   pub(crate) buf_i: usize,
 }
 
-
 impl<'a> Iterator for Questions<'a> {
   type Item = Question<'a>;
 
@@ -80,4 +79,3 @@ impl<'a> Iterator for Questions<'a> {
     Some(question)
   }
 }
-

@@ -15,11 +15,20 @@ impl<'a> Name<'a> {
 
   pub(crate) fn create_pointer(&self, sub_name: &Name<'_>) -> Option<[u8; 2]> {
     let mut labels = self.labels();
-    while labels.next().is_some() {
-      if self.equal_from(labels.buf_i, sub_name) {
-        let [ptr_1, ptr_2] = (labels.buf_i as u16).to_be_bytes();
-        return Some([ptr_1 | PTR_MASK, ptr_2]);
+
+    loop {
+      let i = labels.buf_i;
+
+      if labels.next().is_some() {
+        if self.equal_from(i, sub_name) {
+          let [ptr_1, ptr_2] = (i as u16).to_be_bytes();
+          return Some([ptr_1 | PTR_MASK, ptr_2]);
+        }
+
+        continue;
       }
+
+      break;
     }
 
     None
@@ -41,8 +50,6 @@ impl<'a> Name<'a> {
 
     false
   }
-
-
 
   pub(crate) fn read(buf: &[u8], i: &mut usize) -> bool {
     let global_start = *i;
@@ -218,10 +225,20 @@ mod tests {
   use super::*;
 
   #[test]
-  fn test_name_create_ptr() {
+  fn test_name_create_pointer() {
     let name = Name::from_bytes(&[1, b'a', 1, b'b', 1, b'c', 0]);
+    let name_uppercase = Name::from_bytes(&[1, b'A', 1, b'B', 1, b'C', 0]);
     let sub_name = Name::from_bytes(&[1, b'b', 1, b'c', 0]);
+    let sub_sub_name = Name::from_bytes(&[1, b'c', 0]);
 
+    assert_eq!(name.create_pointer(&name), Some([0b11000000, 0]));
+    assert_eq!(name_uppercase.create_pointer(&name), Some([0b11000000, 0]));
+    assert_eq!(name.create_pointer(&name_uppercase), Some([0b11000000, 0]));
     assert_eq!(name.create_pointer(&sub_name), Some([0b11000000, 2]));
+    assert_eq!(sub_name.create_pointer(&name), None);
+    assert_eq!(sub_name.create_pointer(&sub_sub_name), Some([0b11000000, 2]));
+    assert_eq!(name.create_pointer(&sub_sub_name), Some([0b11000000, 4]));
+    assert_eq!(sub_sub_name.create_pointer(&name), None);
+    assert_eq!(sub_sub_name.create_pointer(&sub_name), None);
   }
 }

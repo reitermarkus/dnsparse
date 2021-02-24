@@ -24,4 +24,4 @@ mod name;
 pub use name::Name;
 
 mod answer;
-pub use answer::Answer;
+pub use answer::{Answer, Answers};
