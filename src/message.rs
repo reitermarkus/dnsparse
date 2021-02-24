@@ -125,16 +125,43 @@ impl Message<'_> {
     unsafe { header.set_answer_count(header.answer_count() + 1) };
   }
 
-  fn add_name(&mut self, i: &mut usize, name: &Name<'_>) {
+  fn add_pointer(&mut self, i: &mut usize, name: &Name<'_>) -> bool {
     for question in self.questions() {
       if let Some(pointer) = question.name().create_pointer(name) {
-        return self.insert(i, &pointer);
+        self.insert(i, &pointer);
+        return true
       }
     }
 
-    for label in name.labels() {
+    false
+  }
+
+  fn add_name(&mut self, i: &mut usize, name: &Name<'_>) {
+    if self.add_pointer(i, name) {
+      return;
+    }
+
+    let mut name_rest: Option<Name<'_>> = None;
+    loop {
+      let (label, name) = if let Some(name) = name_rest {
+        name.split()
+      } else {
+        name.split()
+      };
+
       self.insert(i, &[label.len() as u8]);
-      self.insert(i, label);
+      self.insert(i, label.as_bytes());
+
+      match name {
+        Some(rest) => {
+          if self.add_pointer(i, &rest) {
+            return;
+          }
+
+          name_rest = Some(rest);
+        },
+        None => break,
+      }
     }
 
     self.insert(i, &[0]);
@@ -213,5 +240,31 @@ impl Message<'_> {
     }
 
     i
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn test_name_split() {
+    let mut question = [71, 208, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 7, 99, 97, 112, 116, 105, 118, 101, 5, 97, 112, 112, 108, 101, 3, 99, 111, 109, 0, 0, 1, 0, 1];
+
+    let message = Message::parse(&mut question).unwrap();
+
+    let question = message.questions().next().unwrap();
+    let name = question.name();
+
+    let (label, name) = name.split();
+    assert_eq!(label.as_str(), "captive");
+
+    let (label, name) = name.unwrap().split();
+    assert_eq!(label.as_str(), "apple");
+
+    let (label, name) = name.unwrap().split();
+    assert_eq!(label.as_str(), "com");
+
+    assert!(name.is_none());
   }
 }

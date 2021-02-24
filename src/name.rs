@@ -40,7 +40,7 @@ impl<'a> Name<'a> {
 
     loop {
       match (this.next(), other.next()) {
-        (Some(t), Some(o)) => if !t.iter().zip(o.iter()).all(|(t, o)| t.eq_ignore_ascii_case(o)) {
+        (Some(t), Some(o)) => if !t.as_str().eq_ignore_ascii_case(o.as_str()) {
           break;
         },
         (None, None) => return true,
@@ -63,9 +63,9 @@ impl<'a> Name<'a> {
       let rec_start = *i;
 
       loop {
-        match Label::read(buf, i) {
+        match LabelType::read(buf, i) {
           None => return false,
-          Some(Label::Pointer(ptr)) => {
+          Some(LabelType::Pointer(ptr)) => {
             let mut ptr = ptr as usize;
 
             // Stop following self-referencing pointer.
@@ -75,7 +75,7 @@ impl<'a> Name<'a> {
 
             return read_rec(buf, &mut ptr, global_start, iteration, len);
           },
-          Some(Label::Part(part_len)) => {
+          Some(LabelType::Part(part_len)) => {
             if part_len == 0 {
               return true
             }
@@ -99,6 +99,15 @@ impl<'a> Name<'a> {
     }
   }
 
+  pub(crate) fn split(&self) -> (Label<'a>, Option<Name<'a>>) {
+    let mut labels = self.labels();
+
+    let label = labels.next().unwrap();
+    let name = labels.next().map(|l| Name { buf: l.buf, start: l.buf_i });
+
+    (label, name)
+  }
+
   pub(crate) fn labels(&self) -> Labels<'a> {
     Labels {
       buf: self.buf,
@@ -116,11 +125,7 @@ impl fmt::Display for Name<'_> {
         '.'.fmt(f)?;
       }
 
-      if let Ok(s) = str::from_utf8(label) {
-        s.fmt(f)?;
-      } else {
-        return Err(fmt::Error)
-      }
+      label.as_str().fmt(f)?;
 
       print_dot = true;
     }
@@ -145,7 +150,7 @@ impl PartialEq<str> for Name<'_> {
       }
 
       if let Some(substring) = other.get(other_i..(other_i + label.len())) {
-        if !label.eq_ignore_ascii_case(substring) {
+        if !label.as_bytes().eq_ignore_ascii_case(substring) {
           return false
         }
       } else {
@@ -166,22 +171,27 @@ pub(crate) struct Labels<'a> {
 }
 
 impl<'a> Iterator for Labels<'a> {
-  type Item = &'a [u8];
+  type Item = Label<'a>;
 
   fn next(&mut self) -> Option<Self::Item> {
     loop {
-      match Label::read(self.buf, &mut self.buf_i) {
+      match LabelType::read(self.buf, &mut self.buf_i) {
         None => return None,
-        Some(Label::Pointer(ptr)) => {
+        Some(LabelType::Pointer(ptr)) => {
           self.buf_i = ptr as usize;
           continue;
         },
-        Some(Label::Part(len)) => {
+        Some(LabelType::Part(len)) => {
           if len == 0 {
             return None
           }
 
-          return Some(&self.buf[(self.buf_i - len as usize)..self.buf_i])
+          let label = Label {
+            buf: self.buf,
+            buf_i: self.buf_i - len as usize - 1,
+          };
+
+          return Some(label)
         },
       }
     }
@@ -189,7 +199,30 @@ impl<'a> Iterator for Labels<'a> {
 }
 
 #[derive(Debug)]
-pub(crate) enum Label {
+pub(crate) struct Label<'a> {
+  pub(crate) buf: &'a [u8],
+  pub(crate) buf_i: usize,
+}
+
+impl<'a> Label<'a> {
+  #[inline]
+  pub fn as_bytes(&self) -> &[u8] {
+    &self.buf[(self.buf_i + 1)..(self.buf_i + 1 + self.len())]
+  }
+
+  #[inline]
+  pub fn as_str(&self) -> &str {
+    unsafe { str::from_utf8_unchecked(self.as_bytes()) }
+  }
+
+  #[inline]
+  pub fn len(&self) -> usize {
+    self.buf[self.buf_i] as usize
+  }
+}
+
+#[derive(Debug)]
+pub(crate) enum LabelType {
   Pointer(u16),
   Part(u8),
 }
@@ -197,22 +230,22 @@ pub(crate) enum Label {
 const PTR_MASK: u8 = 0b11000000;
 const LEN_MASK: u8 = !PTR_MASK;
 
-impl Label {
+impl LabelType {
   /// Return whether a label was read and whether it was a pointer or a normal name part.
-  pub(crate) fn read(buf: &[u8], i: &mut usize) -> Option<Label> {
+  pub(crate) fn read(buf: &[u8], i: &mut usize) -> Option<LabelType> {
     if let Some(&ptr_or_len) = buf.get(*i) {
       // Check for pointer:
       // https://tools.ietf.org/rfc/rfc1035#section-4.1.4
       if ptr_or_len & PTR_MASK == PTR_MASK {
         if let Some(&ptr) = buf.get(*i + 1) {
           *i += 1 + 1;
-          Some(Label::Pointer(u16::from_be_bytes([ptr_or_len & LEN_MASK, ptr])))
+          Some(Self::Pointer(u16::from_be_bytes([ptr_or_len & LEN_MASK, ptr])))
         } else {
           None
         }
       } else {
         *i += 1 + (ptr_or_len & LEN_MASK) as usize;
-        Some(Label::Part(ptr_or_len & LEN_MASK))
+        Some(Self::Part(ptr_or_len & LEN_MASK))
       }
     } else {
       None
