@@ -18,13 +18,15 @@ pub enum QueryClass {
 }
 
 impl QueryClass {
-  pub(crate) fn read(buf: &[u8], i: &mut usize) -> bool {
+  pub(crate) fn read(buf: &[u8], i: &mut usize) -> Option<Self> {
     if *i + size_of::<QueryClass>() <= buf.len() {
+      let query_class = u16::from_be_bytes([buf[*i], buf[*i + 1]]);
       *i += size_of::<QueryClass>();
-      true
-    } else {
-      false
+
+      return Some(query_class.into())
     }
+
+    None
   }
 
   pub fn to_be_bytes(&self) -> [u8; 2] {

@@ -59,13 +59,15 @@ impl From<u16> for QueryKind {
 }
 
 impl QueryKind {
-  pub(crate) fn read(buf: &[u8], i: &mut usize) -> bool {
+  pub(crate) fn read(buf: &[u8], i: &mut usize) -> Option<Self> {
     if *i + size_of::<QueryKind>() <= buf.len() {
+      let query_kind = u16::from_be_bytes([buf[*i], buf[*i + 1]]);
       *i += size_of::<QueryKind>();
-      true
-    } else {
-      false
+
+      return Some(query_kind.into())
     }
+
+    None
   }
 
   pub(crate) fn to_be_bytes(&self) -> [u8; 2] {

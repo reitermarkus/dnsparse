@@ -65,7 +65,13 @@ impl<'a> Message<'a> {
     let mut i = HEADER_SIZE;
 
     for _ in 0..frame.header().question_count() {
-      if !Question::read(&frame.buf, &mut i) {
+      if Question::read(&frame.buf, &mut i).is_none() {
+        return Err(())
+      }
+    }
+
+    for _ in 0..frame.header().answer_count() {
+      if Answer::read(&frame.buf, &mut i).is_none() {
         return Err(())
       }
     }
@@ -77,7 +83,7 @@ impl<'a> Message<'a> {
 }
 
 impl fmt::Debug for Message<'_> {
-  fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+  fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
     fmt.debug_struct("Message")
       .field("header", &self.header())
       .field("body", &format_args!("{:?}", &self.buf[HEADER_SIZE..]))
@@ -202,7 +208,7 @@ impl Message<'_> {
     &self.buf[..self.len]
   }
 
-  pub fn questions(&self) -> Questions {
+  pub fn questions(&self) -> Questions<'_> {
     Questions {
       question_count: self.header().question_count() as usize,
       current_question: 0,
@@ -216,13 +222,13 @@ impl Message<'_> {
     let mut i = HEADER_SIZE;
 
     for _ in 0..self.header().question_count() {
-      assert!(Question::read(buf, &mut i));
+      assert!(Question::read(buf, &mut i).is_some());
     }
 
     i
   }
 
-  pub fn answers(&self) -> Answers {
+  pub fn answers(&self) -> Answers<'_> {
     Answers {
       answer_count: self.header().answer_count() as usize,
       current_answer: 0,
@@ -236,7 +242,7 @@ impl Message<'_> {
     let mut i = self.questions_end();
 
     for _ in 0..self.header().answer_count() {
-      assert!(Answer::read(buf, &mut i));
+      assert!(Answer::read(buf, &mut i).is_some());
     }
 
     i

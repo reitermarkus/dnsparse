@@ -11,7 +11,7 @@ pub struct Question<'a> {
 }
 
 impl fmt::Debug for Question<'_> {
-  fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+  fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
     fmt.debug_struct("Question")
       .field("name", &self.name())
       .field("kind", &self.kind())
@@ -22,8 +22,16 @@ impl fmt::Debug for Question<'_> {
 
 impl<'a> Question<'a> {
   #[inline]
-  pub(crate) fn read(buf: &[u8], i: &mut usize) -> bool {
-    Name::read(buf, i) && QueryKind::read(buf, i) && QueryClass::read(buf, i)
+  pub(crate) fn read(buf: &'a [u8], i: &'_ mut usize) -> Option<Self> {
+    let mut j = *i;
+    let question = Self {
+      name:  Name::read(buf, &mut j)?,
+      kind:  QueryKind::read(buf, &mut j)?,
+      class: QueryClass::read(buf, &mut j)?,
+    };
+    *i = j;
+
+    Some(question)
   }
 
   #[inline]
@@ -61,17 +69,7 @@ impl<'a> Iterator for Questions<'a> {
 
     let mut i = self.buf_i;
 
-    // `Questions` can only be created from a valid `Message`, so
-    // reading a `Question` should always succeed here.
-    assert!(Question::read(&self.buf, &mut i));
-    let question = Question {
-      name: Name {
-        buf: &self.buf,
-        start: self.buf_i,
-      },
-      kind: QueryKind::from(u16::from_be_bytes([self.buf[i - 4], self.buf[i - 3]])),
-      class: QueryClass::from(u16::from_be_bytes([self.buf[i - 2], self.buf[i - 1]])),
-    };
+    let question = Question::read(&self.buf, &mut i)?;
 
     self.current_question += 1;
     self.buf_i = i;

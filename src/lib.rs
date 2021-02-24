@@ -1,5 +1,5 @@
 #![cfg_attr(not(test), no_std)]
-#![deny(missing_debug_implementations)]
+#![deny(missing_debug_implementations, rust_2018_idioms)]
 
 //! A `no_std` library for parsing and generating DNS queries and responses.
 //!

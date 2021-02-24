@@ -104,7 +104,7 @@ impl From<u16> for ResponseCode {
 }
 
 impl fmt::Debug for Header {
-  fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+  fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
     fmt.debug_struct("Header")
       .field("id", &self.id())
       .field("kind", &self.kind())
