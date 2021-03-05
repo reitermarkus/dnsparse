@@ -2,7 +2,7 @@ use core::ops::Deref;
 use core::mem::{size_of};
 use core::fmt;
 
-use crate::{Answer, Answers, Header, Question, Questions, QueryKind, QueryClass, Name};
+use crate::{Error, Answer, Answers, Header, Question, Questions, QueryKind, QueryClass, Name};
 
 const HEADER_SIZE: usize = size_of::<Header>();
 const MAX_MESSAGE_SIZE: usize = 512 - HEADER_SIZE;
@@ -54,9 +54,11 @@ impl<'a> Message<'a> {
     MessageBuilder { buf, len: HEADER_SIZE }
   }
 
-  pub fn parse(buffer: &'a mut [u8]) -> Result<Message<'a>, ()> {
-    if buffer.len() < HEADER_SIZE || buffer.len() > HEADER_SIZE + MAX_MESSAGE_SIZE {
-      return Err(())
+  pub fn parse(buffer: &'a mut [u8]) -> Result<Message<'a>, Error> {
+    if buffer.len() < HEADER_SIZE {
+      return Err(Error::MessageTooShort)
+    } else if buffer.len() > HEADER_SIZE + MAX_MESSAGE_SIZE {
+      return Err(Error::MessageTooLong)
     }
 
     let len = buffer.len();
@@ -65,15 +67,11 @@ impl<'a> Message<'a> {
     let mut i = HEADER_SIZE;
 
     for _ in 0..frame.header().question_count() {
-      if Question::read(&frame.buf, &mut i).is_none() {
-        return Err(())
-      }
+      Question::read(&frame.buf, &mut i)?;
     }
 
     for _ in 0..frame.header().answer_count() {
-      if Answer::read(&frame.buf, &mut i).is_none() {
-        return Err(())
-      }
+      Answer::read(&frame.buf, &mut i)?;
     }
 
     frame.len = i;
@@ -222,7 +220,7 @@ impl Message<'_> {
     let mut i = HEADER_SIZE;
 
     for _ in 0..self.header().question_count() {
-      assert!(Question::read(buf, &mut i).is_some());
+      assert!(Question::read(buf, &mut i).is_ok());
     }
 
     i
@@ -242,7 +240,7 @@ impl Message<'_> {
     let mut i = self.questions_end();
 
     for _ in 0..self.header().answer_count() {
-      assert!(Answer::read(buf, &mut i).is_some());
+      assert!(Answer::read(buf, &mut i).is_ok());
     }
 
     i

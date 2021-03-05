@@ -1,6 +1,6 @@
 use core::mem::size_of;
 
-use crate::{Name, QueryKind, QueryClass};
+use crate::{Error, Name, QueryKind, QueryClass};
 
 /// A DNS answer.
 #[derive(Debug)]
@@ -12,33 +12,32 @@ pub struct Answer<'a> {
   pub rdata: &'a [u8],
 }
 
-fn read_ttl(buf: &[u8], i: &mut usize) -> Option<u32> {
+fn read_ttl(buf: &[u8], i: &mut usize) -> Result<u32, Error> {
   if *i + size_of::<u32>() <= buf.len() {
     let ttl = u32::from_be_bytes([buf[*i], buf[*i + 1], buf[*i + 2], buf[*i + 3]]);
     *i += size_of::<u32>();
-    return Some(ttl)
+    return Ok(ttl)
   }
 
-  None
+  Err(Error::MessageTooShort)
 }
 
-fn read_rdata<'a>(buf: &'a [u8], i: &'_ mut usize) -> Option<&'a [u8]> {
+fn read_rdata<'a>(buf: &'a [u8], i: &'_ mut usize) -> Result<&'a [u8], Error> {
   if *i + size_of::<u16>() <= buf.len() {
     let rdata_len = u16::from_be_bytes([buf[*i], buf[*i + 1]]) as usize;
     let rdata_i = *i + size_of::<u16>();
     if rdata_i + rdata_len <= buf.len() {
       let rdata = &buf[rdata_i..(rdata_i + rdata_len)];
       *i = rdata_i + rdata_len;
-      return Some(rdata);
+      return Ok(rdata);
     }
   }
 
-  None
+  Err(Error::MessageTooShort)
 }
 
 impl<'a> Answer<'a> {
-  #[inline]
-  pub(crate) fn read(buf: &'a [u8], i: &'_ mut usize) -> Option<Self> {
+  pub(crate) fn read(buf: &'a [u8], i: &'_ mut usize) -> Result<Self, Error> {
     let mut j = *i;
     let answer = Self {
       name:  Name::read(buf, &mut j)?,
@@ -49,7 +48,7 @@ impl<'a> Answer<'a> {
     };
     *i = j;
 
-    Some(answer)
+    Ok(answer)
   }
 
   pub fn name(&self) -> &Name<'a> {
@@ -92,7 +91,7 @@ impl<'a> Iterator for Answers<'a> {
 
     // `Answers` can only be created from a valid `Message`, so
     // reading an `Answer` should always succeed here.
-    let answer = Answer::read(&self.buf, &mut self.buf_i)?;
+    let answer = Answer::read(&self.buf, &mut self.buf_i).ok()?;
 
     self.current_answer += 1;
 

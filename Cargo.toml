@@ -13,4 +13,7 @@ keywords = ["dns", "query", "response", "no-std"]
 categories = ["network-programming", "parser-implementations"]
 exclude = ["/.github"]
 
+[features]
+std = []
+
 [dependencies]

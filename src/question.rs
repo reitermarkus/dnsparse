@@ -1,6 +1,6 @@
 use core::fmt;
 
-use crate::{Name, QueryKind, QueryClass};
+use crate::{Error, Name, QueryKind, QueryClass};
 
 /// A DNS question.
 #[repr(C)]
@@ -21,8 +21,7 @@ impl fmt::Debug for Question<'_> {
 }
 
 impl<'a> Question<'a> {
-  #[inline]
-  pub(crate) fn read(buf: &'a [u8], i: &'_ mut usize) -> Option<Self> {
+  pub(crate) fn read(buf: &'a [u8], i: &'_ mut usize) -> Result<Self, Error> {
     let mut j = *i;
     let question = Self {
       name:  Name::read(buf, &mut j)?,
@@ -31,7 +30,7 @@ impl<'a> Question<'a> {
     };
     *i = j;
 
-    Some(question)
+    Ok(question)
   }
 
   #[inline]
@@ -69,7 +68,7 @@ impl<'a> Iterator for Questions<'a> {
 
     let mut i = self.buf_i;
 
-    let question = Question::read(&self.buf, &mut i)?;
+    let question = Question::read(&self.buf, &mut i).ok()?;
 
     self.current_question += 1;
     self.buf_i = i;

@@ -1,5 +1,7 @@
 use core::mem::size_of;
 
+use crate::{Error};
+
 /// The class of a DNS query.
 ///
 /// According to [RFC 1035 Section 3.2.4](https://tools.ietf.org/rfc/rfc1035#section-3.2.4).
@@ -18,15 +20,15 @@ pub enum QueryClass {
 }
 
 impl QueryClass {
-  pub(crate) fn read(buf: &[u8], i: &mut usize) -> Option<Self> {
+  pub(crate) fn read(buf: &[u8], i: &mut usize) -> Result<Self, Error> {
     if *i + size_of::<QueryClass>() <= buf.len() {
       let query_class = u16::from_be_bytes([buf[*i], buf[*i + 1]]);
       *i += size_of::<QueryClass>();
 
-      return Some(query_class.into())
+      return Ok(query_class.into())
     }
 
-    None
+    Err(Error::MessageTooShort)
   }
 
   pub fn to_be_bytes(&self) -> [u8; 2] {

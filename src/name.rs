@@ -1,6 +1,8 @@
 use core::fmt;
 use core::str;
 
+use crate::Error;
+
 /// A DNS name.
 #[derive(Debug, Clone)]
 pub struct Name<'a> {
@@ -52,7 +54,7 @@ impl<'a> Name<'a> {
     false
   }
 
-  pub(crate) fn read(buf: &'a [u8], i: &'_ mut usize) -> Option<Self> {
+  pub(crate) fn read(buf: &'a [u8], i: &'_ mut usize) -> Result<Self, Error> {
     let mut j = *i;
     let mut maximum = *i;
     let mut ptr = None;
@@ -60,20 +62,19 @@ impl<'a> Name<'a> {
     let mut len: u8 = 0;
 
     loop {
-      match LabelType::read(buf, ptr.as_mut().unwrap_or(&mut j)) {
-        None => break,
-        Some(LabelType::Pointer(p)) => {
+      match LabelType::read(buf, ptr.as_mut().unwrap_or(&mut j))? {
+        LabelType::Pointer(p) => {
           let p = p as usize;
 
           // Pointers can only point to previous occurences.
           if p >= maximum {
-            break
+            return Err(Error::Pointer)
           }
 
           maximum = p;
           ptr = Some(p);
         },
-        Some(LabelType::Part(part_len)) => {
+        LabelType::Part(part_len) => {
           if part_len == 0 {
             let name = Name {
               buf,
@@ -81,20 +82,18 @@ impl<'a> Name<'a> {
             };
 
             *i = j;
-            return Some(name)
+            return Ok(name)
           }
 
           // Stop if maximum name length of 255 bytes is reached.
           if let Some(l) = len.checked_add(part_len) {
             len = l;
           } else {
-            break
+            return Err(Error::NameTooLong)
           };
         },
       }
     }
-
-    None
   }
 
   pub(crate) fn split(&self) -> (Label<'a>, Option<Name<'a>>) {
@@ -173,13 +172,12 @@ impl<'a> Iterator for Labels<'a> {
 
   fn next(&mut self) -> Option<Self::Item> {
     loop {
-      match LabelType::read(self.buf, &mut self.buf_i) {
-        None => return None,
-        Some(LabelType::Pointer(ptr)) => {
+      match LabelType::read(self.buf, &mut self.buf_i).ok()? {
+        LabelType::Pointer(ptr) => {
           self.buf_i = ptr as usize;
           continue;
         },
-        Some(LabelType::Part(len)) => {
+        LabelType::Part(len) => {
           if len == 0 {
             return None
           }
@@ -230,22 +228,27 @@ const LEN_MASK: u8 = !PTR_MASK;
 
 impl LabelType {
   /// Return whether a label was read and whether it was a pointer or a normal name part.
-  pub(crate) fn read(buf: &[u8], i: &mut usize) -> Option<Self> {
+  pub(crate) fn read(buf: &[u8], i: &mut usize) -> Result<Self, Error> {
     if let Some(&ptr_or_len) = buf.get(*i) {
       // Check for pointer:
       // https://tools.ietf.org/rfc/rfc1035#section-4.1.4
       if ptr_or_len & PTR_MASK == PTR_MASK {
         if let Some(&ptr) = buf.get(*i + 1) {
           *i += 1 + 1;
-          return Some(Self::Pointer(u16::from_be_bytes([ptr_or_len & LEN_MASK, ptr])))
+          return Ok(Self::Pointer(u16::from_be_bytes([ptr_or_len & LEN_MASK, ptr])))
         }
       } else {
-        *i += 1 + (ptr_or_len & LEN_MASK) as usize;
-        return Some(Self::Part(ptr_or_len & LEN_MASK))
+        let len = ptr_or_len & LEN_MASK;
+
+        let j = *i + 1 + len as usize;
+        if j <= buf.len() {
+          *i = j;
+          return Ok(Self::Part(len))
+        }
       }
     }
 
-    None
+    Err(Error::MessageTooShort)
   }
 }
 
