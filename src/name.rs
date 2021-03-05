@@ -9,6 +9,7 @@ pub struct Name<'a> {
 }
 
 impl<'a> Name<'a> {
+  #[cfg(test)]
   pub(crate) fn from_bytes(bytes: &'a [u8]) -> Self {
     Self { buf: bytes, start: 0 }
   }
