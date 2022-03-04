@@ -32,7 +32,7 @@ impl QueryClass {
   }
 
   pub fn to_be_bytes(self) -> [u8; 2] {
-    (*self as u16).to_be_bytes()
+    (self as u16).to_be_bytes()
   }
 }
 
