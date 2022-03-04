@@ -68,7 +68,7 @@ impl<'a> Iterator for Questions<'a> {
 
     let mut i = self.buf_i;
 
-    let question = Question::read(&self.buf, &mut i).ok()?;
+    let question = Question::read(self.buf, &mut i).ok()?;
 
     self.current_question += 1;
     self.buf_i = i;
