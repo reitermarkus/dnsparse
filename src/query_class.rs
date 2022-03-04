@@ -31,7 +31,7 @@ impl QueryClass {
     Err(Error::MessageTooShort)
   }
 
-  pub fn to_be_bytes(&self) -> [u8; 2] {
+  pub fn to_be_bytes(self) -> [u8; 2] {
     (*self as u16).to_be_bytes()
   }
 }
