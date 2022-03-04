@@ -67,11 +67,11 @@ impl<'a> Message<'a> {
     let mut i = HEADER_SIZE;
 
     for _ in 0..frame.header().question_count() {
-      Question::read(&frame.buf, &mut i)?;
+      Question::read(frame.buf, &mut i)?;
     }
 
     for _ in 0..frame.header().answer_count() {
-      Answer::read(&frame.buf, &mut i)?;
+      Answer::read(frame.buf, &mut i)?;
     }
 
     frame.len = i;
@@ -210,7 +210,7 @@ impl Message<'_> {
     Questions {
       question_count: self.header().question_count() as usize,
       current_question: 0,
-      buf: &self.as_bytes(),
+      buf: self.as_bytes(),
       buf_i: HEADER_SIZE,
     }
   }
@@ -230,7 +230,7 @@ impl Message<'_> {
     Answers {
       answer_count: self.header().answer_count() as usize,
       current_answer: 0,
-      buf: &self.as_bytes(),
+      buf: self.as_bytes(),
       buf_i: self.questions_end(),
     }
   }
