@@ -1,19 +1,9 @@
-name: CI
+on: [pull_request, push]
 
-on: [push, pull_request]
+name: CI
 
 jobs:
   ci:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Lint
-        uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: -- -D warnings
-      - name: Test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --all-features --no-fail-fast
+    uses: reitermarkus/.github/.github/workflows/cargo-build-publish.yml@main
+    secrets:
+      CRATESIO_TOKEN: ${{ secrets.CRATESIO_TOKEN }}
