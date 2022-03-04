@@ -68,7 +68,7 @@ impl<'a> Answer<'a> {
   }
 
   pub fn rdata(&self) -> &'a [u8] {
-    &self.rdata
+    self.rdata
   }
 }
 
@@ -91,7 +91,7 @@ impl<'a> Iterator for Answers<'a> {
 
     // `Answers` can only be created from a valid `Message`, so
     // reading an `Answer` should always succeed here.
-    let answer = Answer::read(&self.buf, &mut self.buf_i).ok()?;
+    let answer = Answer::read(self.buf, &mut self.buf_i).ok()?;
 
     self.current_answer += 1;
 
