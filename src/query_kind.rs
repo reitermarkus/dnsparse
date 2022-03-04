@@ -72,7 +72,7 @@ impl QueryKind {
     Err(Error::MessageTooShort)
   }
 
-  pub(crate) fn to_be_bytes(&self) -> [u8; 2] {
-    (*self as u16).to_be_bytes()
+  pub(crate) fn to_be_bytes(self) -> [u8; 2] {
+    (self as u16).to_be_bytes()
   }
 }
